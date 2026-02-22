@@ -63,10 +63,8 @@ read -rp "API Hash: " API_HASH
 
 read -rp "Helper bot username (without @): " BOTNAME
 BOTNAME="${BOTNAME//@/}"
-read -rsp "Bot token: " BOT_TOKEN
-echo
 
-read -rsp "Two-step verification password (press Enter if none): " TWO_FA_PASSWORD
+read -rsp "Bot token: " BOT_TOKEN
 echo
 
 BASE_DIR="/root"
@@ -107,13 +105,33 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # -------------------------
-# Update configuration
+# Update configuration (safe substitution)
 # -------------------------
 echo "[4/6] Updating lib/Information.py..."
 INFO_FILE="${APP_DIR}/lib/Information.py"
 
 python3 - <<PY
 import re, pathlib, sys
+
+admin_user_id = "${ADMIN_USER_ID}".strip()
+api_id = "${API_ID}".strip()
+api_hash = "${API_HASH}".strip()
+botname = "${BOTNAME}".strip()
+bot_token = "${BOT_TOKEN}".strip()
+self_name = "${SELF_NAME}".strip()
+
+if not admin_user_id.isdigit():
+    sys.exit("Error: Admin user ID must be numeric")
+if not api_id.isdigit():
+    sys.exit("Error: API ID must be numeric")
+if not api_hash:
+    sys.exit("Error: API Hash is empty")
+if not botname:
+    sys.exit("Error: Helper bot username is empty")
+if not bot_token:
+    sys.exit("Error: Bot token is empty")
+if not self_name:
+    sys.exit("Error: Self name is empty")
 
 p = pathlib.Path("${INFO_FILE}")
 s = p.read_text(encoding="utf-8")
@@ -124,19 +142,16 @@ def must_sub(pattern, repl, text):
         raise SystemExit(f"Pattern not found in Information.py: {pattern}")
     return new
 
-# Basic fields
-s = must_sub(r"admin_user_id\\s*=\\s*\\d+", f"admin_user_id = {int(${ADMIN_USER_ID})}", s)
-s = must_sub(r"api_id\\s*=\\s*\\d+", f"api_id = {int(${API_ID})}", s)
-s = must_sub(r"api_hash\\s*=\\s*'[^']*'", f"api_hash = '{${API_HASH}}'", s)
+s = must_sub(r"admin_user_id\s*=\s*\d+", f"admin_user_id = {admin_user_id}", s)
+s = must_sub(r"api_id\s*=\s*\d+", f"api_id = {api_id}", s)
+s = must_sub(r"api_hash\s*=\s*'[^']*'", f"api_hash = '{api_hash}'", s)
+s = must_sub(r"helper_username\s*=\s*'[^']*'", f"helper_username = '{botname}'", s)
+s = must_sub(r"bot_token\s*=\s*'[^']*'", f"bot_token = '{bot_token}'", s)
 
-# Names/tokens
-s = must_sub(r"helper_username\\s*=\\s*'[^']*'", f"helper_username = '{${BOTNAME}}'", s)
-s = must_sub(r"bot_token\\s*=\\s*'[^']*'", f"bot_token = '{${BOT_TOKEN}}'", s)
-
-# Session name (TelegramClient('...', api_id, api_hash))
+# Ensure Telethon session name matches SELF_NAME (TelegramClient('...', api_id, api_hash))
 s = must_sub(
-    r"TelegramClient\\('([^']*)'\\s*,\\s*api_id\\s*,\\s*api_hash\\)",
-    f"TelegramClient('{${SELF_NAME}}', api_id, api_hash)",
+    r"TelegramClient\('([^']*)'\s*,\s*api_id\s*,\s*api_hash\)",
+    f"TelegramClient('{self_name}', api_id, api_hash)",
     s
 )
 
@@ -145,7 +160,7 @@ print("Configuration updated")
 PY
 
 # -------------------------
-# Login + verify (no manual python3 main.py needed)
+# Login + verify (2FA asked only if needed)
 # -------------------------
 echo
 echo "[5/6] Creating and verifying Telegram session (interactive)..."
@@ -160,12 +175,15 @@ api_id = int("${API_ID}")
 api_hash = "${API_HASH}"
 session_name = "${SELF_NAME}"
 phone = "${PHONE_NUMBER}"
-two_fa = "${TWO_FA_PASSWORD}"
 
 client = TelegramClient(session_name, api_id, api_hash)
 
-def code_callback():
+def ask_code():
     return input("Login code: ").strip()
+
+def ask_2fa():
+    # no echo handling in pure python here; keep simple for now
+    return input("2FA password: ").strip()
 
 try:
     client.connect()
@@ -173,11 +191,9 @@ try:
     if not client.is_user_authorized():
         client.send_code_request(phone)
         try:
-            client.sign_in(phone=phone, code=code_callback())
+            client.sign_in(phone=phone, code=ask_code())
         except SessionPasswordNeededError:
-            if not two_fa:
-                two_fa = input("2FA password: ").strip()
-            client.sign_in(password=two_fa)
+            client.sign_in(password=ask_2fa())
 
     me = client.get_me()
     if not me:

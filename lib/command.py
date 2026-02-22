@@ -5,14 +5,14 @@ from .updater import *
 async def send_welcome_message():
     admin_user = await client.get_entity(admin_user_id)
     admin_first_name = admin_user.first_name if admin_user.first_name else "there"
-    helptxt = f"use `/help 1` command"
+    helptxt = f"use `/help 1` command to view help page no.1"
 
     try:
-        await client(JoinChannelRequest("@TRself"))
+        await client(JoinChannelRequest("@NoroSelf"))
     except Exception as e:
-        print(f"Failed to join @TRself channel: {e}")
+        print(f"Failed to join @NoroSelf channel: {e}")
 
-    await client.send_message(admin_user_id, f'Hi {admin_first_name}!\nWelcome to the TRself bot.\n**Dev: @TRself **\n{helptxt}')
+    await client.send_message(admin_user_id, f'Hi {admin_first_name}!\nWelcome to the NoroSelf bot.\n**Dev: @NoroSelf **\n{helptxt}')
 
 pic_folder = 'pic/'
 
@@ -1886,3 +1886,4 @@ async def settings(event):
                 response += f"`{file_content}`"
 
         await event.edit(response)
+

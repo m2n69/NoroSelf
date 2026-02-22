@@ -5,14 +5,11 @@ REPO_URL="https://github.com/m2n69/NoroSelf.git"
 DEFAULT_VERSION="v0.1"
 VERSION="${DEFAULT_VERSION}"
 
-# -------------------------
-# Argument parsing
-# -------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version|-v)
       VERSION="${2:-}"
-      [[ -z "${VERSION}" ]] && { echo "Error: Missing version"; exit 1; }
+      [[ -z "${VERSION}" ]] && { echo "Error: --version requires a value"; exit 1; }
       shift 2
       ;;
     *)
@@ -22,11 +19,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# -------------------------
-# Root check
-# -------------------------
 if [[ "${EUID:-0}" -ne 0 ]]; then
-  echo "Error: Please run as root"
+  echo "Error: Please run as root (sudo -i)"
   exit 1
 fi
 
@@ -36,14 +30,13 @@ echo "======================================"
 echo "Version: ${VERSION}"
 echo
 
-# -------------------------
-# Inputs
-# -------------------------
 read -rp "Selfbot name: " SELF_NAME
 SELF_NAME="${SELF_NAME// /}"
+[[ -z "${SELF_NAME}" ]] && { echo "Error: Invalid selfbot name"; exit 1; }
 
 read -rp "Phone number (international format): " PHONE_NUMBER
 PHONE_NUMBER="${PHONE_NUMBER// /}"
+[[ -z "${PHONE_NUMBER}" ]] && { echo "Error: Invalid phone number"; exit 1; }
 
 read -rp "Admin user ID: " ADMIN_USER_ID
 read -rp "API ID: " API_ID
@@ -63,35 +56,24 @@ echo "[1/6] Installing dependencies..."
 apt update -y
 apt install -y git python3-venv python3-full
 
-# -------------------------
-# Directory check
-# -------------------------
 if [[ -d "${APP_DIR}" ]]; then
   echo "Error: Directory already exists -> ${APP_DIR}"
   exit 1
 fi
 
-# -------------------------
-# Clone
-# -------------------------
 echo "[2/6] Cloning repository..."
 cd "${BASE_DIR}"
 git clone --branch "${VERSION}" --depth 1 "${REPO_URL}" "${APP_DIR}"
 
 cd "${APP_DIR}"
 
-# -------------------------
-# Venv
-# -------------------------
 echo "[3/6] Creating virtual environment..."
 python3 -m venv venv
+# shellcheck disable=SC1091
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# -------------------------
-# Config update
-# -------------------------
 echo "[4/6] Updating configuration..."
 INFO_FILE="${APP_DIR}/lib/Information.py"
 
@@ -125,22 +107,35 @@ p.write_text(s)
 print("Configuration updated")
 PY
 
-# -------------------------
-# LOGIN (ASYNC FIXED)
-# -------------------------
 echo
 echo "[5/6] Creating Telegram session..."
-echo "Enter the login code when prompted."
+echo "A login code was sent to your Telegram app/SMS."
+echo "Please enter it below."
 
-python3 - <<PY
-import asyncio, sys
+# Read from /dev/tty to avoid EOFError in non-standard stdin situations
+if [[ ! -r /dev/tty ]]; then
+  echo "Error: /dev/tty not available. Run this installer in a real SSH terminal."
+  exit 1
+fi
+
+read -r -p "Login code: " LOGIN_CODE < /dev/tty
+
+export NS_API_ID="${API_ID}"
+export NS_API_HASH="${API_HASH}"
+export NS_SESSION_NAME="${SELF_NAME}"
+export NS_PHONE="${PHONE_NUMBER}"
+export NS_LOGIN_CODE="${LOGIN_CODE}"
+
+python3 - <<'PY'
+import asyncio, os, sys
 from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, PhoneCodeExpiredError
 
-api_id = int("${API_ID}")
-api_hash = "${API_HASH}"
-session_name = "${SELF_NAME}"
-phone = "${PHONE_NUMBER}"
+api_id = int(os.environ["NS_API_ID"])
+api_hash = os.environ["NS_API_HASH"]
+session_name = os.environ["NS_SESSION_NAME"]
+phone = os.environ["NS_PHONE"]
+code = os.environ["NS_LOGIN_CODE"]
 
 async def main():
     client = TelegramClient(session_name, api_id, api_hash)
@@ -148,16 +143,23 @@ async def main():
 
     if not await client.is_user_authorized():
         await client.send_code_request(phone)
-        code = input("Login code: ").strip()
         try:
             await client.sign_in(phone=phone, code=code)
         except SessionPasswordNeededError:
-            pwd = input("2FA password: ").strip()
+            # Ask 2FA password via /dev/tty (no echo)
+            print("2FA password required.")
+            # read password safely from tty
+            import subprocess
+            pwd = subprocess.check_output(["bash", "-lc", "read -s -p '2FA password: ' p < /dev/tty; echo; echo \"$p\""], text=True).strip()
             await client.sign_in(password=pwd)
+        except (PhoneCodeInvalidError, PhoneCodeExpiredError) as e:
+            print(f"Error: {type(e).__name__}. Please re-run installer and enter the correct/valid code.", file=sys.stderr)
+            await client.disconnect()
+            sys.exit(1)
 
     me = await client.get_me()
     if not me:
-        print("Login failed", file=sys.stderr)
+        print("Error: Login failed (get_me returned nothing).", file=sys.stderr)
         await client.disconnect()
         sys.exit(1)
 
@@ -170,15 +172,11 @@ asyncio.run(main())
 PY
 
 if [[ ! -f "${APP_DIR}/${SELF_NAME}.session" ]]; then
-  echo "Error: Session file not found"
+  echo "Error: Session file not found after login."
   exit 1
 fi
+echo "Session created: ${APP_DIR}/${SELF_NAME}.session"
 
-echo "Session created"
-
-# -------------------------
-# SYSTEMD
-# -------------------------
 echo
 echo "[6/6] Creating systemd services..."
 
@@ -192,6 +190,8 @@ Type=simple
 WorkingDirectory=${APP_DIR}
 ExecStart=${APP_DIR}/venv/bin/python helper.py
 Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
@@ -200,7 +200,7 @@ EOF
 cat > "/etc/systemd/system/${SELF_NAME}-main.service" <<EOF
 [Unit]
 Description=${SELF_NAME} Main Service
-After=${SELF_NAME}-helper.service
+After=network.target ${SELF_NAME}-helper.service
 Requires=${SELF_NAME}-helper.service
 
 [Service]
@@ -208,6 +208,8 @@ Type=simple
 WorkingDirectory=${APP_DIR}
 ExecStart=${APP_DIR}/venv/bin/python main.py
 Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
@@ -221,3 +223,5 @@ echo
 echo "======================================"
 echo "Installation Completed Successfully"
 echo "======================================"
+echo "Service status:"
+systemctl status "${SELF_NAME}-main.service" --no-pager || true

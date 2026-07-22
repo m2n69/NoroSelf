@@ -9,7 +9,7 @@ pytz
 spotipy
 pytube
 googlesearch-python
-googletrans==4.0.0-rc1
+googletrans
 beautifulsoup4
 pillow
 gtts

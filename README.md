@@ -18,5 +18,15 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/m2n69/NoroSelf/main
 ```
 https://raw.githubusercontent.com/m2n69/NoroSelf/main/ReRun.sh
 ```
+
+## ورود از طریق QRcode مربوط به آذر ۱۴۰۵
+اگر در حین ورود به تلگرام کد دریافت نمیکنید احتمالا مشکل دریافت کد دارید باید ورود از طریق QRcode را امتحان کنید.
+دستور تک خطی زیر برای شماست.
+
+```
+bash <(curl -fsSL https://raw.githubusercontent.com/m2n69/NoroSelf/main/install_qr.sh)
+```
+
+
 ## حرف آخر
 با اینکه آپشن تایم نیم و بیو هست ولی **اگر نیاز دارید ساعت رو بدونید لطفا به بالای صفحه گوشی خودتون یا پایین مانیتور نگاه کنید، تلگرام برای نمایش ساعت در بیو و اسم ساخته نشده!**

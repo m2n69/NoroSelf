@@ -6,8 +6,8 @@ set -euo pipefail
 # Root check
 # -------------------------
 if [[ "${EUID:-0}" -ne 0 ]]; then
-    echo "Error: Please run as root."
-    exit 1
+  echo "Error: Please run as root (sudo -i)"
+  exit 1
 fi
 
 # -------------------------
@@ -16,51 +16,36 @@ fi
 read -r -p "Selfbot name: " SELF_NAME
 SELF_NAME="${SELF_NAME// /}"
 
-if [[ -z "${SELF_NAME}" ]]; then
-    echo "Error: Selfbot name is required."
-    exit 1
-fi
-
 BASE_DIR="/root"
 APP_DIR="${BASE_DIR}/${SELF_NAME}"
 
 if [[ ! -d "${APP_DIR}" ]]; then
-    echo "Error: Directory not found: ${APP_DIR}"
-    exit 1
+  echo "Error: Directory not found -> ${APP_DIR}"
+  exit 1
 fi
 
 # -------------------------
-# Virtual Environment
-# -------------------------
-if [[ ! -f "${APP_DIR}/venv/bin/activate" ]]; then
-    echo "Error: Virtual environment not found."
-    exit 1
-fi
-
-cd "${APP_DIR}"
-source venv/bin/activate
-
-# -------------------------
-# Main Login
+# LOGIN (STABLE METHOD)
 # -------------------------
 echo
+echo "[1/2] Telegram Login"
 echo "Launching main.py..."
 echo "Complete login if required."
 echo "After successful login press CTRL+C to continue."
 echo
 
+cd "${APP_DIR}"
+source venv/bin/activate
+
 python3 main.py || true
 
-# -------------------------
-# Check Session
-# -------------------------
 echo
 echo "Checking session file..."
 
 if [[ ! -f "${APP_DIR}/${SELF_NAME}.session" ]]; then
-    echo "Error: Session file not found."
-    echo "Login may have failed."
-    exit 1
+  echo "Error: Session file not found."
+  echo "Login may have failed."
+  exit 1
 fi
 
 echo "Login successful."
@@ -69,7 +54,7 @@ echo "Login successful."
 # SYSTEMD
 # -------------------------
 echo
-echo "Creating systemd services..."
+echo "[2/2] Creating systemd services..."
 
 cat > "/etc/systemd/system/${SELF_NAME}-helper.service" <<EOF
 [Unit]

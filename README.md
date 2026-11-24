@@ -30,7 +30,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/m2n69/NoroSelf/main/install_
 ## اجرای مجدد QR
 
 ```
-bash <(curl -fsSL https://raw.githubusercontent.com/m2n69/NoroSelf/main/Rerun_qr.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/m2n69/NoroSelf/main/ReRun_qr.sh)
 ```
 
 

@@ -27,6 +27,12 @@ https://raw.githubusercontent.com/m2n69/NoroSelf/main/ReRun.sh
 bash <(curl -fsSL https://raw.githubusercontent.com/m2n69/NoroSelf/main/install_qr.sh)
 ```
 
+## اجرای مجدد QR
+
+```
+bash <(curl -fsSL https://raw.githubusercontent.com/m2n69/NoroSelf/main/Rerun_qr.sh)
+```
+
 
 ## حرف آخر
 با اینکه آپشن تایم نیم و بیو هست ولی **اگر نیاز دارید ساعت رو بدونید لطفا به بالای صفحه گوشی خودتون یا پایین مانیتور نگاه کنید، تلگرام برای نمایش ساعت در بیو و اسم ساخته نشده!**
